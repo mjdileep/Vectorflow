@@ -18,7 +18,7 @@ def mse(pred, y, mode="train"):
 
 def softmax(pred, y, mode="train"):
     """
-        Mean Squard Error loss fucntion 
+        Softmax loss fucntion 
         Inputs:
         - pred: predicted values (N, D)
         - y: expected output indices (N,)

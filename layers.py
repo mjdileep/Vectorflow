@@ -2,14 +2,23 @@ import numpy as np
 
 
 class Layer:
+    """
+        The base class of the Layer 
+    """
     def __call__(self, x, **kwargs):
         return self.forward(x)
 
     def grad_zero():
+        """
+            Set accumilated gradients to zero in the layer 
+        """
         for each in self.grads.keys():
             self.grads[each]=np.abs(self.grads[each]*0.0)
 
 class Linear(Layer):
+    """
+       Linear layer class 
+    """
     
     def __init__(self, in_size, out_size):
         """
@@ -55,6 +64,9 @@ class Linear(Layer):
         return dout
 
 class ReLU(Linear):
+    """
+       ReLU layer class 
+    """
     
     def forward(self, x, **kwargs):
         """
@@ -88,6 +100,9 @@ class ReLU(Linear):
 
 
 class Stack(Layer):
+    """
+       Stack layer class which is to stack given number of layers sequentially 
+    """
     
     def __init__(self, *layers):
         self.layers = layers

@@ -272,7 +272,7 @@ class Conv2d(Layer):
     
     def __init__(self, in_filters, out_filters, kernal_size=3, padding=1, stride=1):
         """
-            Constructor of Liniear Layer 
+            Constructor of Conv2d Layer 
             Inputs:
             - in_filters: input filter size
             - out_filters: output filter size
@@ -363,6 +363,164 @@ class Conv2d(Layer):
         self.grads["b"] = db
         return dx
 
+
+class MaxPooling(Layer):
+    
+    """
+       Pooling layer class 
+    """
+    
+    def __init__(self, pool_height, pool_width, stride=1):
+        """
+            Constructor of Pooling Layer 
+            Inputs:
+            - pool_height: height of the pooling
+            - pool_width: width of the pooling
+            - padding: padding (zero padding)
+            - stride: stride
+        """
+        super().__init__()
+        
+        self.pool_height = pool_height
+        self.pool_width = pool_width
+        self.stride = stride
+        
+        self.cache = None
+        
+    def forward(self, x, **kwargs):
+        """
+            Computes the forward pass.
+
+            Inputs:
+            - x: Input data, of shape (N, C, H, W)
+
+            Returns:
+            - y: Output data, of shape (N, F, _H, _W)
+        """
+        out = None
+        N, C, H, W = x.shape
+        pool_height = self.pool_height
+        pool_width = self.pool_width
+        stride =self.stride
+
+        assert (H - pool_height) % stride == 0
+        assert (W - pool_width) % stride == 0
+        _H = int(1 + (H - pool_height) / stride)
+        _W = int(1 + (W - pool_width) / stride)
+        out = np.zeros((N, C, _H, _W))
+        for h in range(0,H-pool_height, stride):
+            for w in range(0,W-pool_width, stride):
+                out[:,:,int((h+1)/stride)-1, int((w+1)/stride)-1] = np.max(x[:,:,h:h+pool_height, w:w+pool_width], axis=(2,3))
+
+        self.cache = x
+        return out
+    
+    
+    def backward(self, dout):
+        """
+            Computes the backward pass 
+
+            Inputs:
+            - dx: Upstream gradient data, of shape (N, F, W, H)
+        """
+        x = self.cache
+        N, C, H, W = x.shape
+        _, _, _H, _W = dout.shape
+        pool_height = self.pool_height
+        pool_width = self.pool_width
+        stride =self.stride
+        assert (H - pool_height) % stride == 0
+        assert (W - pool_width) % stride == 0
+
+        dx = np.zeros(x.shape)
+        for n in range(N):
+            for c in range(C):
+                for h in range(0,_H):
+                    for w in range(0,_W):
+                        chunk = x[n,c,h*stride:h*stride+pool_height, w*stride:w*stride+pool_width]
+                        ind = np.unravel_index(np.argmax(chunk, axis=None), chunk.shape)
+                        dx[n,c,h*stride+ind[0], w*stride+ind[1]] += dout[n,c,h,w]
+        return dx
+    
+
+class AvgPooling(Layer):
+    
+    """
+       Pooling layer class 
+    """
+    
+    def __init__(self, pool_height, pool_width, stride=1):
+        """
+            Constructor of Pooling Layer 
+            Inputs:
+            - pool_height: height of the pooling
+            - pool_width: width of the pooling
+            - padding: padding (zero padding)
+            - stride: stride
+        """
+        super().__init__()
+        
+        self.pool_height = pool_height
+        self.pool_width = pool_width
+        self.stride = stride
+        
+        self.cache = None
+        
+    def forward(self, x, **kwargs):
+        """
+            Computes the forward pass.
+
+            Inputs:
+            - x: Input data, of shape (N, C, H, W)
+
+            Returns:
+            - y: Output data, of shape (N, F, _H, _W)
+        """
+        out = None
+        N, C, H, W = x.shape
+        pool_height = self.pool_height
+        pool_width = self.pool_width
+        stride =self.stride
+
+        assert (H - pool_height) % stride == 0
+        assert (W - pool_width) % stride == 0
+        _H = int(1 + (H - pool_height) / stride)
+        _W = int(1 + (W - pool_width) / stride)
+        out = np.zeros((N, C, _H, _W))
+        for h in range(0,H-pool_height, stride):
+            for w in range(0,W-pool_width, stride):
+                out[:,:,int((h+1)/stride)-1, int((w+1)/stride)-1] = np.mean(x[:,:,h:h+pool_height, w:w+pool_width], axis=(2,3))
+
+        self.cache = x
+        return out
+    
+    
+    def backward(self, dout):
+        """
+            Computes the backward pass 
+
+            Inputs:
+            - dx: Upstream gradient data, of shape (N, F, W, H)
+        """
+        x = self.cache
+        N, C, H, W = x.shape
+        _, _, _H, _W = dout.shape
+        pool_height = self.pool_height
+        pool_width = self.pool_width
+        stride =self.stride
+        assert (H - pool_height) % stride == 0
+        assert (W - pool_width) % stride == 0
+
+        dx = np.zeros(x.shape)
+        for n in range(N):
+            for c in range(C):
+                for h in range(0,_H):
+                    for w in range(0,_W):
+                        dx[n,c,h*stride:h*stride+pool_height, w*stride:w*stride+pool_width] += dout[n,c,h,w]/(pool_height*pool_width)
+        return dx
+
+    
+    
 class Flatten(Layer):
     
     def __init__(self):

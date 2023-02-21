@@ -43,7 +43,7 @@ class Linear(Layer):
         """
         super().__init__()
         
-        self.params["w"] = np.random.randn(in_size, out_size)* np.sqrt(2/(in_size**2+out_size**2)) # He initialization
+        self.params["w"] = np.random.randn(in_size, out_size)* np.sqrt(2/in_size) # He initialization
         self.grads["w"] = np.zeros((in_size, out_size))
         self.param_configs["w"] = {}
         
@@ -125,16 +125,21 @@ class Dropout(Layer):
         self.p = keep
     def forward(self, x, **kwargs):
         if kwargs["train"]:
+            shape = x.shape
+            x = x.reshape(shape[0], -1)
             mask = np.random.rand(x.shape[0], x.shape[1])>self.p
             x[mask] = 0
             x /=(self.p+0.0000001)
             self.cache = mask
+            x = x.reshape(shape)
         return x
         
     def backward(self, dx):
+        shape = dx.shape
+        dx = dx.reshape(shape[0], -1)
         mask = self.cache
         dx[mask] = 0
-        return dx
+        return dx.reshape(shape)
     
     
 class Norm(Layer):
@@ -185,15 +190,17 @@ class Norm(Layer):
 
     
 class Batchnorm(Norm):
-    
+    """
+       Batchnorm class 
+    """
     def __init__(self, size, momentum=0.9, eps=1e-5):
         super().__init__(eps)
         
-        self.params["gamma"] = np.random.randn(1, size)* np.sqrt(2/(size**2)) # He initialization
+        self.params["gamma"] = np.random.randn(1, size) * np.sqrt(2/size)  # He initialization
         self.grads["gamma"] = np.zeros((1, size))
         self.param_configs["gamma"] = {}
         
-        self.params["beta"] = np.random.randn(1, size)* np.sqrt(2/(size**2)) # He initialization
+        self.params["beta"] = np.random.randn(1, size) * np.sqrt(2/size) # He initialization
         self.grads["beta"] = np.zeros((1, size))
         self.param_configs["beta"] = {}
         
@@ -228,7 +235,9 @@ class Batchnorm(Norm):
         return dx
     
 class Layernorm(Norm):
-    
+    """
+       Layernorm class 
+    """
     def __init__(self, size, momentum=0.9, eps=1e-5):
         super().__init__(eps)
         self.params["gamma"] = np.random.randn(1, size)* np.sqrt(2/(size**2)) # He initialization
@@ -255,6 +264,118 @@ class Layernorm(Norm):
         return dnorm_dx_1.T + dnorm_dx_2.T + dnorm_dx_3.reshape(dx.shape[0], -1)
         
 
+class Conv2d(Layer):
+    
+    """
+       Conv2d layer class 
+    """
+    
+    def __init__(self, in_filters, out_filters, kernal_size=3, padding=1, stride=1):
+        """
+            Constructor of Liniear Layer 
+            Inputs:
+            - in_filters: input filter size
+            - out_filters: output filter size
+            - kernal_size: Kernal size
+            - padding: padding (zero padding)
+            - stride: stride
+        """
+        super().__init__()
+        
+        self.params["w"] = np.random.randn(out_filters, in_filters, kernal_size, kernal_size)* np.sqrt(2/(in_filters*kernal_size**2))
+        self.grads["w"] = np.zeros_like(self.params["w"])
+        self.param_configs["w"] = {}
+        
+        self.params["b"] = np.zeros(out_filters)
+        self.grads["b"] = np.zeros(out_filters)
+        self.param_configs["b"] = {}
+        
+        self.in_filters = in_filters
+        self.out_filters = out_filters
+        self.kernal_size = kernal_size
+        self.padding = padding
+        self.stride = stride
+        
+        
+        self.cache = None
+        
+    def forward(self, x, **kwargs):
+        """
+            Computes the forward pass.
+
+            Inputs:
+            - x: Input data, of shape (N, C, H, W)
+
+            Returns:
+            - y: Output data, of shape (N, F, _H, _W)
+        """
+        #Shape W = (F, C, K, K)
+        #out shape = (N, F, _H, _W)
+        pad = self.padding
+        stride = self.stride
+        padded = np.pad(x,((0,0), (0,0), (pad,pad), (pad,pad)), constant_values=0)
+         
+        
+        w = self.params["w"]
+        b = self.params["b"]
+        N, _, H, W = x.shape
+        F, _, HH, WW = w.shape
+        _H = int(1 + (H + 2 * pad - HH) / stride)
+        _W = int(1 + (W + 2 * pad - WW) / stride)
+        
+        out = np.zeros((N, F, _H, _W))
+        for n in range(N):
+            for f in range(F):
+                for i in range(0, H+2*pad - HH+1, stride):
+                    for j in range(0, W+2*pad - WW+1, stride):
+                        out[n,f,int(i/stride),int(j/stride)]= np.sum(padded[n,:,i:i+HH,j:j+WW]*w[f,:,:,:])+b[f]
+
+        self.cache = padded
+        return out
+    
+    def backward(self, dout):
+        """
+            Computes the backward pass for an conv2d layer.
+
+            Inputs:
+            - dx: Upstream gradient data, of shape (N, F, W, H)
+        """
+        padded = self.cache
+        pad = self.padding
+        stride = self.stride 
+        N, F, W, H = dout.shape
+        w = self.params["w"]
+        b = self.params["b"]
+        
+        dw = np.zeros(w.shape)
+        dx = np.zeros(padded.shape)
+        k = w.shape[-1]
+        for n in range(N):
+            for f in range(F):
+                for i in range(W):
+                    for j in range(H):
+                        dw[f,:,:,:] += dout[n,f,i,j] * padded[n,:, i*stride:i*stride+k, j*stride:j*stride+k]
+                        dx[n,:,i*stride:i*stride+k, j*stride:j*stride+k] += dout[n,f,i,j] * w[f,:,:,:]
+
+        dx = dx[:,:,pad:-pad, pad:-pad]
+        db = np.sum(dout, axis=(0,2,3))
+        self.grads["w"] = dw
+        self.grads["b"] = db
+        return dx
+
+class Flatten(Layer):
+    
+    def __init__(self):
+        super().__init__()
+        
+    def forward(self, x, **kwargs):
+        self.cache = x.shape
+        return x.reshape(x.shape[0], -1)
+    
+    def backward(self, dx):
+        return dx.reshape(self.cache)
+    
+    
 
 class Stack:
     """

@@ -82,7 +82,7 @@ class Linear(Layer):
         return dout
             
 
-class ReLU(Linear):
+class ReLU(Layer):
     """
        ReLU layer class 
     """
@@ -97,11 +97,10 @@ class ReLU(Linear):
             Returns:
             - y: Output data, of shape (N, out_1, ... out_k)
         """
-        out = x.dot(self.params["w"])+self.params["b"]
-        mask = out<0
-        out[mask] = 0
-        self.cache = x, mask
-        return out
+        mask = x<0
+        x[mask] = 0
+        self.cache = mask
+        return x
     
     def backward(self, dx):
         """
@@ -110,14 +109,75 @@ class ReLU(Linear):
             Inputs:
             - dx: Upstream gradient data, of shape (N, out_1, ... out_k)
         """
-        x, mask = self.cache
-        dx = np.copy(dx)
+        mask = self.cache
         dx[mask]=0.0
-        self.grads["w"] += x.T.dot(dx)
-        self.grads["b"] += np.sum(dx, axis=0)
-        dout = dx.dot(self.params["w"].T)
-        return dout
+        return dx
 
+    
+class Sigmoid(Layer):
+    """
+       Sigmoid layer class 
+    """
+    
+    def forward(self, x, **kwargs):
+        """
+            Computes the forward pass.
+
+            Inputs:
+            - x: Input data, of shape (N, d_1, ... d_k)
+
+            Returns:
+            - y: Output data, of shape (N, out_1, ... out_k)
+        """
+        x = 1/(1+np.exp(-x))
+        self.cache = x
+        return x
+    
+    def backward(self, dx):
+        """
+            Computes the backward pass for an linear layer.
+
+            Inputs:
+            - dx: Upstream gradient data, of shape (N, out_1, ... out_k)
+        """
+        x = self.cache
+        dx = dx*x*(1-x)
+        return dx
+
+    
+class Tanh(Layer):
+    """
+       Tanh layer class 
+    """
+    
+    def forward(self, x, **kwargs):
+        """
+            Computes the forward pass.
+
+            Inputs:
+            - x: Input data, of shape (N, d_1, ... d_k)
+
+            Returns:
+            - y: Output data, of shape (N, out_1, ... out_k)
+        """
+        e = np.exp(x)
+        en = np.exp(-x)
+        x = (e-en)/(e+en)
+        self.cache = x
+        return x
+    
+    def backward(self, dx):
+        """
+            Computes the backward pass for an linear layer.
+
+            Inputs:
+            - dx: Upstream gradient data, of shape (N, out_1, ... out_k)
+        """
+        x = self.cache
+        dx = dx*(1-x**2)
+        return dx
+    
+    
 class Dropout(Layer):
     
     def __init__(self, keep=0.5):
@@ -168,7 +228,7 @@ class Norm(Layer):
         dnorm_dx_1 = dnorm_dx_a
 
         dnorm_std = -dnorm*x_a/(std**2)
-        dstd_sample_var = 0.5*(sample_var**(-0.5))
+        dstd_sample_var = 0.5*((sample_var+self.eps)**(-0.5))
         dnorm_sample_var = np.sum(dnorm_std*dstd_sample_var, axis=0)
         dsample_var_x_e = 1/n
         dnorm_x_e = dnorm_sample_var*dsample_var_x_e
@@ -205,33 +265,41 @@ class Batchnorm(Norm):
         self.param_configs["beta"] = {}
         
         self.momentum = momentum
-        self.running_mean = np.zeros((1, size))
-        self.running_var = np.zeros((1, size))
+        self.running_mean = 0.0
+        self.running_var = 0.0
         
     def forward(self, x, **kwargs):
+        r = int(x.shape[1]/self.params["gamma"].shape[1])
+        gamma = np.repeat(self.params["gamma"], r)
+        beta = np.repeat(self.params["beta"], r)
+            
         if kwargs["train"]:
             norm, sample_mean, sample_var = self.norm(x)
-            out = norm*self.params["gamma"] + self.params["beta"]
+            out = norm*gamma + beta
             
             self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * sample_mean
             self.running_var = self.momentum * self.running_var + (1 - self.momentum) * sample_var
         else:
             norm = (x - self.running_mean)/(np.sqrt(self.running_var)+self.eps)
-            out = norm*self.params["gamma"] + self.params["beta"]
+            out = norm*gamma + beta
             
         return out
         
     def backward(self, dx):
         _, _, _, _, norm, _, _, _, _, _ = self.cache
+        r = int(dx.shape[1]/self.params["gamma"].shape[1])
+        gamma = np.repeat(self.params["gamma"], r)
+        beta = np.repeat(self.params["beta"], r)
+            
         dbeta = dx.sum(axis=0)
         dgamma = (norm*dx).sum(axis=0)
-        dnorm = dx*self.params["gamma"]
+        dnorm = dx*gamma
         dnorm_dx_1, dnorm_dx_2, dnorm_dx_3 = self.dnorm(dnorm)
 
         dx = dnorm_dx_1 + dnorm_dx_2 + dnorm_dx_3
-    
-        self.grads["gamma"] = dgamma
-        self.grads["beta"] = dbeta
+        
+        self.grads["gamma"] = np.add.reduceat(dgamma, np.arange(0,dgamma.shape[0],r))
+        self.grads["beta"] = np.add.reduceat(dbeta, np.arange(0,dbeta.shape[0],r))
         return dx
     
 class Layernorm(Norm):
@@ -516,9 +584,26 @@ class AvgPooling(Layer):
             for c in range(C):
                 for h in range(0,_H):
                     for w in range(0,_W):
-                        dx[n,c,h*stride:h*stride+pool_height, w*stride:w*stride+pool_width] += dout[n,c,h,w]/(pool_height*pool_width)
+                        dx[n,c,h*stride:h*stride+pool_height, w*stride:w*stride+pool_width] += dout[n,c,h,w]/(pool_height)
         return dx
 
+
+class Batchnorm2d(Layer):
+    def __init__(self, size, momentum=0.9, eps=1e-5):
+        super().__init__()
+        
+        self._batchnorm = Batchnorm(size, momentum=momentum, eps=eps)
+        
+    def forward(self, x, **kwargs):
+        shape = x.shape
+        x = self._batchnorm.forward(x.reshape(shape[0],-1), **kwargs)
+        return x.reshape(shape)
+    
+    def backward(self, dout):
+        shape = dout.shape
+        dout = self._batchnorm.backward(dout.reshape(shape[0],-1))
+        return dout.reshape(shape)
+        
     
     
 class Flatten(Layer):

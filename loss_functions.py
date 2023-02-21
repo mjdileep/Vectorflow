@@ -29,9 +29,11 @@ def softmax(pred, y, mode="train"):
     norm = e/s
     scores = norm[np.arange(N),y]
     loss = np.sum(-np.log(scores))/N
-    
+    dout = None
     if mode=="train":
         dout = np.zeros(pred.shape)
         dout[np.arange(N),y]=1
         dout = (e/s - dout)/N
     return loss, dout
+
+

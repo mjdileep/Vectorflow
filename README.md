@@ -5,7 +5,7 @@ A simple light-weight neural network library developed using only numpy vectors.
 
 ```python
 import numpy as np
-from layers import *
+from vectorflow.layers import *
 import solver
 import scipy.io
 from load_data import download

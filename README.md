@@ -67,17 +67,3 @@ s.train(X_train[:10000,], y_train[:10000,], epochs=100)
     Epoch:13, Training Loss:0.00759399152670637. Validation Loss:0.07764810472422692
 
 
-
-```python
-
-```
-
-
-```python
-
-```
-
-
-```python
-
-```

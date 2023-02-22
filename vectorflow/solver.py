@@ -1,5 +1,5 @@
-import optim
-import .loss_functions
+from . import optim
+from . import loss_functions
 import numpy as np
 
 class Solver:

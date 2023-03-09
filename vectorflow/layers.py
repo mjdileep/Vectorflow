@@ -112,6 +112,35 @@ class ReLU(Layer):
         mask = self.cache
         dx[mask]=0.0
         return dx
+    
+
+class ABS(Layer):
+    """
+       ReLU layer class 
+    """
+    
+    def forward(self, x, **kwargs):
+        """
+            Computes the forward pass.
+
+            Inputs:
+            - x: Input data, of shape (N, d_1, ... d_k)
+
+            Returns:
+            - y: Output data, of shape (N, out_1, ... out_k)
+        """
+        self.cache = x
+        return np.abs(x)
+    
+    def backward(self, dx):
+        """
+            Computes the backward pass for an linear layer.
+
+            Inputs:
+            - dx: Upstream gradient data, of shape (N, out_1, ... out_k)
+        """
+        x = self.cache
+        return dx * np.sign(x)
 
     
 class Sigmoid(Layer):

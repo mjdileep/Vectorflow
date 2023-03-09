@@ -11,7 +11,6 @@ class HopfieldNetwork:
     
     def __init__(self, input_size:int, size: int, max_no_change_count=10):
         self.connections = np.zeros((size,size))
-        self.max_no_change_count = size*2
         self.max_itter = size**2
         self.n = size
         self.input_size = input_size
@@ -26,28 +25,26 @@ class HopfieldNetwork:
         for i in range(data.shape[0]):
             inputs = np.copy(data[i,:])
             self.units[:self.input_size] = inputs
-            no_change_count = self.max_no_change_count
             itter = 0
-            while no_change_count > 0 and itter < self.max_itter:
+            while itter < self.max_itter:
                 r = np.random.randint(0, self.n)
                 c = True
                 for j in range(self.input_size, self.n):
                     energy = sum([self.units[j]*self.connections[j, k] for k in range(0, self.n)])
-                    if energy < 0:
-                        if self.units[j] ==1:
-                            c = False
+                    if energy < 0 and int(self.units[j]) ==1:
+                        c = False
                         self.units[j] = 0 
-                    else:
-                        if self.units[j] ==0:
-                            c = False
+                    elif  energy > 0 and int(self.units[j]) ==0:
+                        c = False
                         self.units[j] = 1
-                                
+                        
                 for j in range(self.n):
                     for k in range(self.n):
                         self.connections[j, k] += (k!=j)*2*(2*self.units[j]-1)*(2*self.units[k]-1)
                 if c:
-                    no_change_count -=1
+                    break
                 itter +=1
+            
                 
                 
             

@@ -16,7 +16,6 @@ class HopfieldNetwork:
         self.n = size
         self.input_size = input_size
         self.units =  np.ones(size)
-        self.temperature_start = 100
         
     def fit(self, data):
         assert data.shape[1] == self.input_size
@@ -32,16 +31,20 @@ class HopfieldNetwork:
             while no_change_count > 0 and itter < self.max_itter:
                 r = np.random.randint(0, self.n)
                 c = True
-                while True:
-                    val = sum([self.units[j]*self.connections[r, j] for j in range(0, self.n)])
-                    p = 1/(1+np.exp(-val/max(1, self.temperature_start-itter)))
-                    if int(np.random.rand()<p) == int(self.units[r]):
-                        break
+                for j in range(self.input_size, self.n):
+                    energy = sum([self.units[j]*self.connections[j, k] for k in range(0, self.n)])
+                    if energy < 0:
+                        if self.units[j] ==1:
+                            c = False
+                        self.units[j] = 0 
                     else:
-                        k = np.random.randint(0,self.n)
-                        self.connections[r, k] += (k!=r)*2*(2*self.units[r]-1)*(2*self.units[k]-1)
-                        # 2*(2si-1)(2sj-1)
-                        c = False
+                        if self.units[j] ==0:
+                            c = False
+                        self.units[j] = 1
+                                
+                for j in range(self.n):
+                    for k in range(self.n):
+                        self.connections[j, k] += (k!=j)*2*(2*self.units[j]-1)*(2*self.units[k]-1)
                 if c:
                     no_change_count -=1
                 itter +=1

@@ -6,8 +6,10 @@ class NaiveBM:
     This is based on the most inefficient way to train the model as Geoffrey Hinton suggested in 1983. 
     https://en.wikipedia.org/wiki/Boltzmann_machine
     """
-    def __init__(self, n, v):
-        self.lr = 1.0
+    def __init__(self, n, v, training_method=0, lr=1.0):
+        self.lr = lr
+        self._lambda = 0.9
+        self.training_method = training_method # 0 for stochastic and 1 for meanfield
         self.v = v
         self.n = n
         self.bb = np.zeros(n)
@@ -26,6 +28,17 @@ class NaiveBM:
     def __p(self, i, T=1):
         """ Calculates the probabilitt that a unit is on"""
         return 1/(1+np.exp(-self.__e(i)/T))
+    
+    
+    def meanfield_settle(self, start=0, T=1):
+        delta_p =1
+        for i in range(self.settle_itter):
+            r = np.random.randint(start,self.n)
+            p = self.__p(r, T)
+            delta_p = 0.5*delta_p + 0.5*abs(p-self.ss[r])
+            self.ss[r] = self._lambda*p + (1-self._lambda)*self.ss[r]
+            if abs(delta_p) < 0.01:
+                break
     
     def partial_settle(self, start=0, T=1):
         for i in range(self.partial_settle_itter):
@@ -54,10 +67,14 @@ class NaiveBM:
         assert v == self.v, "Visible vector size doesn't match:{}!={}".format(v, self.v)
         n = self.n
         
-        particles = np.random.rand(d, n) < 0.5 # Generate random vectors
+        if self.training_method == 0:
+            particles = np.random.rand(d, n) < 0.5 # Generate random vectors
+        else:
+            particles = np.full((d,n),0.5) # initilise with 0.5 
+            
         particles[np.arange(d),0:v] = data # Clamp visible vectors
         
-        fp = n*2
+        fp = max(20,n*2)
         fantacy_particles =  np.random.rand(fp, n) < 0.5 # Generate random vectors
         
         for epoch in range(epochs):
@@ -66,14 +83,17 @@ class NaiveBM:
             probs_v = np.empty((d, n))
             probs_v_w = np.empty((d, n, n))
             for each in range(d):
-                self.ss = particles[each,:]
-                self.partial_settle(v, T=T) # Settle to thermal equilibrium
-                particles[each,:] = self.ss # Remember the particle state
+                if self.training_method == 0: #stochasitic method
+                    self.ss = particles[each,:]
+                    self.partial_settle(v, T=T) # Settle to thermal equilibrium using stochasitic method
+                else: #meanfield method
+                    self.ss = np.copy(particles[each,:])
+                    self.meanfield_settle(v, T=T) # Settle to thermal equilibrium using meanfield method
 
                 # Collect probabilities
                 for i in range(n):
                     probs_v[each,i] = self.__p(i)
-
+            
             # Get the probabilities of the combinations
             for i in range(d):
                 probs_v_w[i,:,:] = np.outer(probs_v[i,:],probs_v[i,:]) 
@@ -103,11 +123,11 @@ class NaiveBM:
             delta_bb = probs_v_b - probs_nv_b
 
             # Update weights
-            self.ww += delta_ww
+            self.ww += delta_ww*self.lr
             self.ww[np.arange(n),np.arange(n)]=0
 
             #Update bias
-            self.bb += delta_bb
+            self.bb += delta_bb*self.lr
             
             #print(delta_ww)
 

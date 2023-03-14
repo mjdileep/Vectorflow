@@ -90,9 +90,8 @@ class NaiveBM:
                     self.ss = np.copy(particles[each,:])
                     self.meanfield_settle(v, T=T) # Settle to thermal equilibrium using meanfield method
 
-                # Collect probabilities
-                for i in range(n):
-                    probs_v[each,i] = self.__p(i)
+                # Collect states
+                probs_v[each,:] = np.copy(self.ss)
             
             # Get the probabilities of the combinations
             for i in range(d):
@@ -109,9 +108,8 @@ class NaiveBM:
                 self.partial_settle(T=T) # Settle to thermal equilibrium
                 fantacy_particles[each,:] = self.ss # Remember the particle state
 
-                # Collect probabilities
-                for i in range(n):
-                    probs_nv[each, i] = self.__p(i)
+                # Collect states
+                probs_nv[each, :] = np.copy(self.ss)
 
             # Get the probabilities of the combinations
             for i in range(fp):

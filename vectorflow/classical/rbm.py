@@ -22,13 +22,13 @@ class RBM:
             return np.dot(self.ww[i,:], self.ss_h) + self.bb_v[i]
         else:
             return np.dot(self.ww[:,i], self.ss_v) + self.bb_h[i]
-    
+        
     def reconstruct(self, start=0):
         for i in range(start, self.v):
             energy = self.__e(i, True)
             if energy > 0:
                 self.ss_v[i] = 1
-            elif energy <= 0:
+            elif energy < 0:
                 self.ss_v[i] = 0
     
     def update_hidden(self):
@@ -36,7 +36,7 @@ class RBM:
             energy = self.__e(i, False)
             if energy > 0:
                 self.ss_h[i] = 1
-            elif energy <= 0:
+            elif energy < 0:
                 self.ss_h[i] = 0
     
     def fit(self, data, epochs=10):
@@ -81,10 +81,8 @@ class RBM:
     def retrieve(self, vector):
         v = vector.shape[0]
         assert v <= self.v, "Input vector size is not compatible match:{}>{}".format(v, self.v)
-        self.ss_v = np.random.rand(self.v) <0.5
+        self.ss_v = np.full(self.v, False) 
         self.ss_v[0:v] = np.copy(vector)
-        for i in range(100):
-            self.update_hidden()
-            self.reconstruct(start=v)
-            
+        self.update_hidden()
+        self.reconstruct(start=0)
         return np.copy(self.ss_v)
